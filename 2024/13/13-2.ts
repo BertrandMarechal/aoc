@@ -5,7 +5,7 @@ const PRIZE_REGEXP = /Prize: X=([0-9]+), Y=([0-9]+)/;
 
 const aButtonCost = 3;
 const bButtonCost = 1;
-const maxButtonPush = 100;
+const deltaPrize = 10000000000000;
 
 class V2 {
     x: number;
@@ -30,11 +30,10 @@ class ClawMachine {
         const [, ...prizeInput] = prizeLine.match(PRIZE_REGEXP);
         this.a = new V2(aInput as [string, string]);
         this.b = new V2(bInput as [string, string]);
-        this.prize = new V2(prizeInput as [string, string]);
+        this.prize = new V2([`${+prizeInput[0] + deltaPrize}`, `${+prizeInput[1] + deltaPrize}`]);
     }
 
     findLowestOption() {
-        let lowestCost = Infinity;
         /*
             We need to find the solutions to the following equations:
             ta => Touches on A
@@ -57,10 +56,6 @@ class ClawMachine {
          */
         const touchesOnB = Math.round((this.prize.y - this.prize.x * this.a.y / this.a.x) / (this.b.y - this.b.x * this.a.y / this.a.x));
         const touchesOnA = Math.round((this.prize.x - touchesOnB * this.b.x) / this.a.x);
-        // this only works if none of the buttons are touched more than 100 times
-        if (touchesOnB > 100 || touchesOnA > 100) {
-            return 0;
-        }
         // this only works if touches on B.s rounded value works
         if (touchesOnB * this.b.x + touchesOnA * this.a.x !== this.prize.x) {
             return 0;
