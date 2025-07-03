@@ -22,193 +22,14 @@ function log(level: number, ...data: any[]) {
     }
 }
 
-enum Direction {
-    NorthWest = "north-west",
-    SouthWest = "south-west",
-    NorthEast = "north-east",
-    SouthEast = "south-east",
-    West = "west",
-    East = "east",
-    North = "north",
-    South = "south",
-}
-
-enum NextPositionMode {
-    External = "external",
-    Internal = "internal",
-}
-
-class RegionMover {
-    static getNextPosition(x: number, y: number, direction: Direction): { x: number; y: number } {
-        switch (direction) {
-            case Direction.West:
-                return { x, y: y - 1 };
-            case Direction.NorthWest:
-                return { x: x - 1, y: y - 1 };
-            case Direction.NorthEast:
-                return { x: x - 1, y: y + 1 };
-            case Direction.SouthWest:
-                return { x: x + 1, y: y - 1 };
-            case Direction.SouthEast:
-                return { x: x + 1, y: y + 1 };
-            case Direction.East:
-                return { x, y: y + 1 };
-            case Direction.North:
-                return { x: x - 1, y };
-            case Direction.South:
-                return { x: x + 1, y };
-        }
-    }
-
-    static getNextDirection(direction: Direction): Direction {
-        switch (direction) {
-            case Direction.West:
-                return Direction.North;
-            case Direction.East:
-                return Direction.South;
-            case Direction.North:
-                return Direction.East;
-            case Direction.South:
-                return Direction.West;
-        }
-    }
-
-    static getNextPositions(x: number, y: number, direction: Direction): {
-        x: number,
-        y: number,
-        direction: Direction
-    }[] {
-        switch (direction) {
-            case Direction.West:
-                return [
-                    { ...RegionMover.getNextPosition(x, y, Direction.South), direction: Direction.South },
-                    { ...RegionMover.getNextPosition(x, y, Direction.West), direction: Direction.West },
-                    { ...RegionMover.getNextPosition(x, y, Direction.North), direction: Direction.North },
-                ];
-            case Direction.East:
-                return [
-                    { ...RegionMover.getNextPosition(x, y, Direction.North), direction: Direction.North },
-                    { ...RegionMover.getNextPosition(x, y, Direction.East), direction: Direction.East },
-                    { ...RegionMover.getNextPosition(x, y, Direction.South), direction: Direction.South },
-                ];
-            case Direction.North:
-                return [
-                    { ...RegionMover.getNextPosition(x, y, Direction.West), direction: Direction.West },
-                    { ...RegionMover.getNextPosition(x, y, Direction.North), direction: Direction.North },
-                    { ...RegionMover.getNextPosition(x, y, Direction.East), direction: Direction.East },
-                ];
-            case Direction.South:
-                return [
-                    { ...RegionMover.getNextPosition(x, y, Direction.East), direction: Direction.East },
-                    { ...RegionMover.getNextPosition(x, y, Direction.South), direction: Direction.South },
-                    { ...RegionMover.getNextPosition(x, y, Direction.West), direction: Direction.West },
-                ];
-        }
-    }
-
-    static getNeighbourCoordinates(x: number, y: number): [number, number][] {
-        return [
-            [x - 1, y],
-            [x + 1, y],
-            [x, y + 1],
-            [x, y - 1],
-        ];
-    }
-}
-
 class Region {
     count = 0;
     fenceCount = 0;
-    sideCount = 0;
-    sideFromHolesCount = 0;
     index: number;
     parts: [number, number][] = [];
-    holes: [number, number][] = [];
 
     constructor(index: number) {
         this.index = index;
-    }
-
-    countExternalSides(data: string[][]) {
-        this.findHoles(data.length, data[0].length);
-
-        // start on the outer border
-        const firstPart = this.parts[0];
-        // We start from the first item which would be the north-west (NW) side, and try to move east (j+1)
-        let currentPart = [...firstPart];
-        let direction = Direction.East;
-        let looped = false;
-        this.sideCount = 1;
-        const visitedParts: [number, number, Direction][] = [[...firstPart, direction]];
-
-        let idx = 0;
-        while (!looped && idx++ < 100) {
-            let nextPositions = RegionMover.getNextPositions(currentPart[0], currentPart[1], direction);
-            let nextPosition = nextPositions.find(pos => this.parts.some(part => part[0] === pos.x && part[1] === pos.y));
-            if (!nextPosition) {
-                // in that case we are on a tail => we set the same position as the currentPart, but we rotate
-                nextPosition = {
-                    x: currentPart[0],
-                    y: currentPart[1],
-                    direction: RegionMover.getNextDirection(direction),
-                };
-            }
-            if (visitedParts.some(visitedPart => nextPosition.x === visitedPart[0] && nextPosition.y === visitedPart[1] && visitedPart[2] === nextPosition.direction)) {
-                looped = true;
-            } else {
-                if (nextPosition.direction !== direction) {
-                    log(4, `Changing direction from "${direction}" to "${nextPosition.direction}"`);
-                    direction = nextPosition.direction;
-                    this.sideCount++;
-                }
-                currentPart = [nextPosition.x, nextPosition.y];
-                visitedParts.push([nextPosition.x, nextPosition.y, direction]);
-            }
-        }
-    }
-
-    /**
-     * Goes through the limits of the region and see if there are some holes contained in the region
-     */
-    findHoles(dataSizeX: number, dataSizeY: number) {
-        log(5, "find holes");
-        const maxX = Math.min(dataSizeX, this.parts.reduce((agg, curr) => Math.max(agg, curr[0]), -Infinity));
-        const minX = Math.max(0, this.parts.reduce((agg, curr) => Math.min(agg, curr[0]), Infinity));
-        const maxY = Math.min(dataSizeY, this.parts.reduce((agg, curr) => Math.max(agg, curr[1]), -Infinity));
-        const minY = Math.max(0, this.parts.reduce((agg, curr) => Math.min(agg, curr[1]), Infinity));
-
-        // we take out the border ones as we are looking for holes inside the region
-        for (let i = minX + 1; i < maxX; i++) {
-            for (let j = minY + 1; j < maxY; j++) {
-                if (!this.parts.some(part => part[0] === i && part[1] === j)) {
-                    this.holes.push([i, j]);
-                }
-            }
-        }
-        // we now take out the holes that have neither parts nor holes as neighbours
-        let allOk = false;
-        while (!allOk) {
-            let partsAndHoles = [
-                ...this.parts,
-                ...this.holes,
-            ];
-            allOk = true;
-            for (let i = this.holes.length - 1; i >= 0; i--) {
-                if (!RegionMover.getNeighbourCoordinates(this.holes[i][0], this.holes[i][1]).every(neighbour =>
-                    partsAndHoles.some(partOrHole => partOrHole[0] === neighbour[0] && partOrHole[1] === neighbour[1])
-                )) {
-                    this.holes.splice(i, 1);
-                    allOk = false;
-                }
-            }
-        }
-    }
-
-    countExternalSidesFromRegionIfContained(region: Region) {
-        const contained = region.parts.every(part => this.holes.some(hole => part[0] === hole[0] && part[1] === hole[1]));
-        if (contained) {
-            this.sideFromHolesCount += region.sideCount;
-        }
     }
 }
 
@@ -301,43 +122,106 @@ class CharData {
         return value;
     }
 
-    computeExternalSides(data: string[][]) {
-        log(3, `computeExternalSides ${this.char}`);
-        for (let i = 0; i < this.index + 1; i++) {
-            if (this.regions[`${i}`]) {
-                // calculate the external sides value
-                log(4, `computeExternalSides for region ${i}`);
-                this.regions[`${i}`].countExternalSides(data);
-            }
-        }
-    }
 
-    checkContainedRegions(map: Record<string, CharData>) {
-        const regions = Object.values(map)
-            // filter out our own data
-            .filter(({ char }) => char !== this.char)
-            // take all the regions
-            .reduce((agg: Region[], curr: CharData) => {
-                agg.push(...Object.values(curr.regions));
-                return agg;
-            }, []);
 
-        for (let i = 0; i < this.index + 1; i++) {
-            if (this.regions[`${i}`]) {
-                for (const region of regions) {
-                    this.regions[`${i}`].countExternalSidesFromRegionIfContained(region);
-                }
-            }
-        }
-    }
-
-    getValueForSide(): number {
+    getValueForSides(maxX: number, maxY: number): number {
         let value = 0;
         for (let i = 0; i < this.index + 1; i++) {
-            if (this.regions[`${i}`]) {
-                // calculate the external sides value
-                value += (this.regions[`${i}`].sideCount + this.regions[`${i}`].sideFromHolesCount) * this.regions[`${i}`].count;
-                log(3, this.char, `${i}`, value, `(${this.regions[`${i}`].sideCount} + ${this.regions[`${i}`].sideFromHolesCount}) x ${this.regions[`${i}`].count}`);
+            const region = this.regions[`${i}`];
+            if (region) {
+                const parts = region.parts;
+
+                let top = 0;
+                let bottom = 0;
+                let left = 0;
+                let right = 0;
+                // count the sides that have no parts at the top
+
+                for (let j = 0; j < maxX; j++) {
+                    for (let k = 0; k < maxY; k++) {
+                        // find the part in the list
+                        const isInList = parts.some(part => part[0] === j && part[1] === k);
+                        const sameCharIsNotOnTheCheckedPartPosition = !parts.some(part => part[0] === j - 1 && part[1] === k);
+                        const previousCellIsContainedInCharList = parts.some(part => part[0] === j && part[1] === k - 1);
+                        const sameCharIsOnThePreviousCellCheckedPartPosition = parts.some(part => part[0] === j - 1 && part[1] === k - 1);
+
+                        if (isInList) {
+                            if (sameCharIsNotOnTheCheckedPartPosition) {
+                                if (
+                                    !previousCellIsContainedInCharList ||
+                                    sameCharIsOnThePreviousCellCheckedPartPosition
+                                ) {
+                                    top++;
+                                }
+                            }
+                        }
+                    }
+                }
+                // count the sides that have no parts at the bottom
+                for (let j = 0; j < maxX; j++) {
+                    for (let k = 0; k < maxY; k++) {
+                        // find the part in the list
+                        const isInList = parts.some(part => part[0] === j && part[1] === k);
+                        const sameCharIsNotOnTheCheckedPartPosition = !parts.some(part => part[0] === j + 1 && part[1] === k);
+                        const previousCellIsContainedInCharList = parts.some(part => part[0] === j && part[1] === k - 1);
+                        const sameCharIsOnThePreviousCellCheckedPartPosition = parts.some(part => part[0] === j + 1 && part[1] === k - 1);
+
+                        if (isInList) {
+                            if (sameCharIsNotOnTheCheckedPartPosition) {
+                                if (
+                                    !previousCellIsContainedInCharList ||
+                                    sameCharIsOnThePreviousCellCheckedPartPosition
+                                ) {
+                                    bottom++;
+                                }
+                            }
+                        }
+                    }
+                }
+                // count the sides that have no parts at the left
+                for (let j = 0; j < maxX; j++) {
+                    for (let k = 0; k < maxY; k++) {
+                        // find the part in the list
+                        const isInList = parts.some(part => part[0] === j && part[1] === k);
+                        const sameCharIsNotOnTheCheckedPartPosition = !parts.some(part => part[0] === j && part[1] === k - 1);
+                        const previousCellIsContainedInCharList = parts.some(part => part[0] === j - 1 && part[1] === k);
+                        const sameCharIsOnThePreviousCellCheckedPartPosition = parts.some(part => part[0] === j - 1 && part[1] === k - 1);
+
+                        if (isInList) {
+                            if (sameCharIsNotOnTheCheckedPartPosition) {
+                                if (
+                                    !previousCellIsContainedInCharList ||
+                                    sameCharIsOnThePreviousCellCheckedPartPosition
+                                ) {
+                                    left++;
+                                }
+                            }
+                        }
+                    }
+                }
+                // count the sides that have no parts at the right
+                for (let j = 0; j < maxX; j++) {
+                    for (let k = 0; k < maxY; k++) {
+                        // find the part in the list
+                        const isInList = parts.some(part => part[0] === j && part[1] === k);
+                        const sameCharIsNotOnTheCheckedPartPosition = !parts.some(part => part[0] === j && part[1] === k + 1);
+                        const previousCellIsContainedInCharList = parts.some(part => part[0] === j - 1 && part[1] === k);
+                        const sameCharIsOnThePreviousCellCheckedPartPosition = parts.some(part => part[0] === j - 1 && part[1] === k + 1);
+
+                        if (isInList) {
+                            if (sameCharIsNotOnTheCheckedPartPosition) {
+                                if (
+                                    !previousCellIsContainedInCharList ||
+                                    sameCharIsOnThePreviousCellCheckedPartPosition
+                                ) {
+                                    right++;
+                                }
+                            }
+                        }
+                    }
+                }
+                value += (top + bottom + left + right) * parts.length;
+                // console.log(this.char, top, bottom, left, right, parts.length, (top + bottom + left + right) * this.regions[`${i}`].parts.length);
             }
         }
         return value;
@@ -362,9 +246,10 @@ function resolve1(data: string[][]): number {
 
 function resolve2(data: string[][]): number {
     const map: Record<string, CharData> = {};
+    const maxX = data.length;
+    const maxY = data[0].length;
 
     log(1, `Starting resolution`);
-    log(2, `Starting processing data`);
     for (let i = 0; i < data.length; i++) {
         for (let j = 0; j < data[0].length; j++) {
             const char = data[i][j];
@@ -374,19 +259,8 @@ function resolve2(data: string[][]): number {
             map[char].processChar(data, i, j);
         }
     }
-    log(2, `Compute external sides`);
-    // we compute the data relative to the external edge
-    Object.values(map).forEach(mapItem => {
-        mapItem.computeExternalSides(data);
-    });
-    log(2, `Check contained regions`);
-    // we look for included holes
-    Object.values(map).forEach(mapItem => {
-        mapItem.checkContainedRegions(map);
-    });
-    log(2, `Get values`);
     const value = Object.values(map).reduce((agg, charData) => {
-        return agg + charData.getValueForSide(data);
+        return agg + charData.getValueForSides(maxX, maxY);
     }, 0);
     log(1, `Done`);
     return value;
